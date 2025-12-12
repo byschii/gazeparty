@@ -205,7 +205,7 @@ func streamTranscodedVideo(c *gin.Context, videoPath, seekTime string) {
 
 	args = append(args,
 		"-i", videoPath,
-		"-c:v", "libx264",
+		"-c:a", "libmp3lame",
 		"-preset", "ultrafast",
 		"-crf", "23",
 		"-c:a", "aac",
