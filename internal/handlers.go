@@ -205,12 +205,11 @@ func streamTranscodedVideo(c *gin.Context, videoPath, seekTime string) {
 
 	args = append(args,
 		"-i", videoPath,
-		"-map", "0:v:0",
-		"-map", "0:a:0",
 		"-c:v", "libx264",
 		"-preset", "ultrafast",
 		"-crf", "23",
-		"-c:a", "copy",
+		"-c:a", "aac",
+		"-b:a", "192k",
 		"-f", "mp4",
 		"-movflags", "frag_keyframe+empty_moov+default_base_moof",
 		"pipe:1",
@@ -226,6 +225,12 @@ func streamTranscodedVideo(c *gin.Context, videoPath, seekTime string) {
 }
 
 func checkNeedsTranscode(path string) bool {
+	// Controlla estensione - MKV non è supportato da Firefox
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".mkv" || ext == ".avi" || ext == ".wmv" || ext == ".flv" {
+		return true
+	}
+
 	// Usa ffprobe per leggere codec video
 	cmd := exec.Command("ffprobe",
 		"-v", "error",
@@ -236,8 +241,23 @@ func checkNeedsTranscode(path string) bool {
 	)
 
 	output, _ := cmd.Output()
-	codec := strings.TrimSpace(string(output))
+	videoCodec := strings.TrimSpace(string(output))
 
-	// H.264 è nativamente supportato, il resto va transcodificato
-	return codec != "h264"
+	// Controlla anche il codec audio
+	cmdAudio := exec.Command("ffprobe",
+		"-v", "error",
+		"-select_streams", "a:0",
+		"-show_entries", "stream=codec_name",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+
+	audioOutput, _ := cmdAudio.Output()
+	audioCodec := strings.TrimSpace(string(audioOutput))
+
+	// H.264 + AAC sono nativamente supportati, il resto va transcodificato
+	videoOk := videoCodec == "h264"
+	audioOk := audioCodec == "aac" || audioCodec == "mp3"
+
+	return !videoOk || !audioOk
 }
