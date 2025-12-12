@@ -53,17 +53,17 @@ func HandleBrowse(c *gin.Context) {
 
 	for _, file := range files {
 
-		hashed, err := SHA256File(filepath.Join(requestedPath, file.Name()))
+		/*hashed, err := SHA256File(filepath.Join(requestedPath, file.Name()))
 		if err != nil {
 			log.Printf("Errore calcolando hash per %s: %v", file.Name(), err)
 			hashed = "Errore"
-		}
+		}*/
 
 		fileInfo := FileInfo{
 			Name:   file.Name(),
 			Path:   filepath.Join(requestedPath, file.Name()),
 			IsDir:  file.IsDir(),
-			Hashed: hashed,
+			Hashed: "",
 		}
 
 		if file.IsDir() {
