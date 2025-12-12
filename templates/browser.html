@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GazeParty - {{.CurrentPath}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        a { display: block; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h2>📂 {{.CurrentPath}}</h2>
+    
+    {{if .HasParent}}
+    <a href="{{.ParentPath}}">📁 ..</a>
+    {{end}}
+    
+    {{range .Folders}}
+    <a href="{{.Path}}">📁 {{.Name}}</a>
+    {{end}}
+    
+    {{range .Videos}}
+    <a href="{{.Path}}">🎬 {{.Name}}</a> Hash: {{.Hashed}}
+    {{end}}
+</body>
+</html>

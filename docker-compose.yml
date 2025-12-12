@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  gazeparty:
+    build: .
+    ports:
+      - "8066:8066"
+    volumes:
+      - ./media:/video:ro
