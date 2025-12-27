@@ -12,10 +12,11 @@ import (
 )
 
 type FileInfo struct {
-	Name   string
-	Path   string
-	IsDir  bool
-	Hashed string
+	Name           string
+	Path           string
+	PathWithoutExt string
+	IsDir          bool
+	Hashed         string
 }
 
 func HandleBrowse(c *gin.Context) {
@@ -28,8 +29,15 @@ func HandleBrowse(c *gin.Context) {
 	// Verifica se esiste
 	info, err := os.Stat(requestedPath)
 	if err != nil {
-		c.String(404, "Non trovato")
-		return
+		// Prova ad aggiungere estensioni video comuni
+		resolvedPath := tryResolveVideoPath(requestedPath)
+		if resolvedPath != "" {
+			requestedPath = resolvedPath
+			info, err = os.Stat(requestedPath)
+		} else {
+			c.String(404, "Non trovato")
+			return
+		}
 	}
 
 	// Se è un file → mostra player
@@ -59,11 +67,13 @@ func HandleBrowse(c *gin.Context) {
 			hashed = "Errore"
 		}*/
 
+		filePath := filepath.Join(requestedPath, file.Name())
 		fileInfo := FileInfo{
-			Name:   file.Name(),
-			Path:   filepath.Join(requestedPath, file.Name()),
-			IsDir:  file.IsDir(),
-			Hashed: "",
+			Name:           file.Name(),
+			Path:           filePath,
+			PathWithoutExt: removeVideoExtension(filePath),
+			IsDir:          file.IsDir(),
+			Hashed:         "",
 		}
 
 		if file.IsDir() {
@@ -85,33 +95,29 @@ func HandleBrowse(c *gin.Context) {
 func HandleStream(c *gin.Context) {
 	videoPath := c.Param("filepath")
 
-	// Il path dal parametro già inizia con / (es: /video/film/surfsup.mkv)
-	// Questo è già il path assoluto che ci serve
-
 	// Verifica che il file esista
 	if _, err := os.Stat(videoPath); err != nil {
-		c.String(404, "File non trovato: %s", videoPath)
-		return
+		// Prova a risolvere senza estensione
+		resolvedPath := tryResolveVideoPath(videoPath)
+		if resolvedPath != "" {
+			videoPath = resolvedPath
+		} else {
+			c.String(404, "File non trovato: %s", videoPath)
+			return
+		}
 	}
 
+	// Nascondi l'estensione reale usando sempre video/mp4
 	c.Header("Content-Type", "video/mp4")
 
-	if !checkNeedsTranscode(videoPath) {
-		// Stream diretto con supporto Range automatico
-		c.File(videoPath)
-	} else {
-		// Transcoding con supporto per seek
-		rangeHeader := c.GetHeader("Range")
-
-		var seekTime string
-		if rangeHeader != "" {
-			// Estrai il byte offset dal Range header
-			// Calcola approssimativamente il tempo di seek
-			seekTime = calculateSeekTime(videoPath, rangeHeader)
-		}
-
-		streamTranscodedVideo(c, videoPath, seekTime)
+	// Sempre transcodifica per compatibilità universale
+	rangeHeader := c.GetHeader("Range")
+	var seekTime string
+	if rangeHeader != "" {
+		seekTime = calculateSeekTime(videoPath, rangeHeader)
 	}
+
+	streamTranscodedVideo(c, videoPath, seekTime)
 }
 
 func FindFromHash(c *gin.Context) {
@@ -198,20 +204,25 @@ func calculateSeekTime(videoPath, rangeHeader string) string {
 func streamTranscodedVideo(c *gin.Context, videoPath, seekTime string) {
 	args := []string{}
 
-	// Se c'è un seek time, aggiungi il parametro -ss
+	// Seek veloce prima dell'input
 	if seekTime != "" {
 		args = append(args, "-ss", seekTime)
 	}
 
+	args = append(args, "-i", videoPath)
+
+	// Sempre transcodifica per garantire compatibilità
 	args = append(args,
-		"-i", videoPath,
 		"-c:v", "libx264",
 		"-preset", "ultrafast",
-		"-crf", "23",
+		"-tune", "zerolatency",
+		"-crf", "28",
 		"-c:a", "aac",
-		"-b:a", "192k",
+		"-b:a", "128k",
+		"-ac", "2",
 		"-f", "mp4",
-		"-movflags", "frag_keyframe+empty_moov+default_base_moof",
+		"-movflags", "frag_keyframe+empty_moov+default_base_moof+faststart",
+		"-frag_duration", "1000000",
 		"pipe:1",
 	)
 
@@ -219,45 +230,62 @@ func streamTranscodedVideo(c *gin.Context, videoPath, seekTime string) {
 	cmd.Stdout = c.Writer
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		log.Printf("Errore ffmpeg: %v", err)
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		log.Printf("Errore avvio ffmpeg: %v", err)
+		return
+	}
+
+	// Monitor client disconnect
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case <-c.Request.Context().Done():
+		// Client disconnected, kill ffmpeg
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		<-done // Wait for process to exit
+	case err := <-done:
+		// Process finished normally or with error
+		if err != nil && !strings.Contains(err.Error(), "signal: killed") {
+			log.Printf("Errore ffmpeg: %v", err)
+		}
 	}
 }
 
-func checkNeedsTranscode(path string) bool {
-	// Controlla estensione - MKV non è supportato da Firefox
+// removeVideoExtension rimuove l'estensione video dal path
+func removeVideoExtension(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".mkv" || ext == ".avi" || ext == ".wmv" || ext == ".flv" {
-		return true
+	videoExts := []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg"}
+
+	for _, videoExt := range videoExts {
+		if ext == videoExt {
+			return strings.TrimSuffix(path, filepath.Ext(path))
+		}
+	}
+	return path
+}
+
+// tryResolveVideoPath prova ad aggiungere estensioni video comuni per risolvere il path
+func tryResolveVideoPath(path string) string {
+	// Se esiste già, ritorna il path così com'è
+	if _, err := os.Stat(path); err == nil {
+		return path
 	}
 
-	// Usa ffprobe per leggere codec video
-	cmd := exec.Command("ffprobe",
-		"-v", "error",
-		"-select_streams", "v:0",
-		"-show_entries", "stream=codec_name",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		path,
-	)
+	// Prova con estensioni comuni
+	videoExts := []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg"}
 
-	output, _ := cmd.Output()
-	videoCodec := strings.TrimSpace(string(output))
+	for _, ext := range videoExts {
+		testPath := path + ext
+		if _, err := os.Stat(testPath); err == nil {
+			return testPath
+		}
+	}
 
-	// Controlla anche il codec audio
-	cmdAudio := exec.Command("ffprobe",
-		"-v", "error",
-		"-select_streams", "a:0",
-		"-show_entries", "stream=codec_name",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		path,
-	)
-
-	audioOutput, _ := cmdAudio.Output()
-	audioCodec := strings.TrimSpace(string(audioOutput))
-
-	// H.264 + AAC sono nativamente supportati, il resto va transcodificato
-	videoOk := videoCodec == "h264"
-	audioOk := audioCodec == "aac" || audioCodec == "mp3"
-
-	return !videoOk || !audioOk
+	return ""
 }
