@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // VideoData represents video info stored in the data file.
@@ -50,6 +51,9 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 	sem := make(chan struct{}, 3)
 	var wg sync.WaitGroup
 
+	// mark begin time
+	startTime := time.Now()
+
 	for _, path := range paths {
 		wg.Add(1)
 		go func(p string) {
@@ -57,8 +61,14 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			fmt.Printf("[data] processing: %s\n", p)
-			hash, err := fileHash(p, 100)
+			fmt.Printf(
+				"[data] processing %s [speed %f v/s] [count %d/%d] \n",
+				p,
+				float64(len(p))/time.Since(startTime).Seconds(),
+				len(results)+1,
+				len(paths),
+			)
+			hash, err := fileHash(p, 75)
 			if err != nil {
 				fmt.Printf("[data] error hashing %s: %v\n", p, err)
 				return
