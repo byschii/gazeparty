@@ -1,13 +1,15 @@
 package internal
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 var videoExts = []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".flv", ".mpg", ".mpeg", ".m2ts", ".ts", ".vob", ".ogv", ".3gp"}
@@ -85,16 +87,16 @@ func fileHash(path string) (string, error) {
 	}
 	defer file.Close()
 
-	// Hash only first 250MB to speed up large files
-	const maxBytes = 250 * 1024 * 1024
-	buffer := make([]byte, maxBytes)
-	n, err := file.Read(buffer)
-	if err != nil && err.Error() != "EOF" {
+	// Hash only first 200MB to speed up large files
+	const maxBytes = 200 * 1024 * 1024
+
+	hash := xxhash.New()
+	_, err = io.CopyN(hash, file, maxBytes)
+	if err != nil && err != io.EOF {
 		return "", err
 	}
 
-	hash := sha256.Sum256(buffer[:n])
-	return hex.EncodeToString(hash[:]), nil
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func nameWithoutExt(path string) string {
