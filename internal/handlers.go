@@ -11,7 +11,7 @@ import (
 
 const (
 	videoDir        = "/video"
-	segmentDuration = 4
+	segmentDuration = 2
 )
 
 // GET /files
