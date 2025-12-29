@@ -47,7 +47,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 
 	// Process files in parallel (4 workers)
 	results := make(chan VideoData, len(paths))
-	sem := make(chan struct{}, 4)
+	sem := make(chan struct{}, 3)
 	var wg sync.WaitGroup
 
 	for _, path := range paths {
@@ -58,7 +58,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 			defer func() { <-sem }()
 
 			fmt.Printf("[data] processing: %s\n", p)
-			hash, err := fileHash(p)
+			hash, err := fileHash(p, 100)
 			if err != nil {
 				fmt.Printf("[data] error hashing %s: %v\n", p, err)
 				return

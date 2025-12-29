@@ -80,7 +80,7 @@ func videoTitle(path string) string {
 	return nameWithoutExt(path)
 }
 
-func fileHash(path string) (string, error) {
+func fileHash(path string, megaBytes int64) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -88,7 +88,7 @@ func fileHash(path string) (string, error) {
 	defer file.Close()
 
 	// Hash only first 200MB to speed up large files
-	const maxBytes = 200 * 1024 * 1024
+	var maxBytes = megaBytes * 1024 * 1024
 
 	hash := xxhash.New()
 	_, err = io.CopyN(hash, file, maxBytes)
