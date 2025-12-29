@@ -62,13 +62,13 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 			defer func() { <-sem }()
 
 			fmt.Printf(
-				"[data] processing %s [speed %f v/s] [count %d/%d] \n",
+				"[data] processing %s [speed %.1f v/s] [count %d/%d] \n",
 				p,
-				float64(len(p))/time.Since(startTime).Seconds(),
+				float64(done+1)/time.Since(startTime).Seconds(),
 				done+1,
 				len(paths),
 			)
-			hash, err := fileHash(p, 75)
+			hash, err := fileHash(p, 50)
 			if err != nil {
 				fmt.Printf("[data] error hashing %s: %v\n", p, err)
 				return
