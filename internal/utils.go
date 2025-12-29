@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var videoExts = []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm"}
+var videoExts = []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".flv", ".mpg", ".mpeg", ".m2ts", ".ts", ".vob", ".ogv", ".3gp"}
 
 func isVideo(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
@@ -79,11 +79,21 @@ func videoTitle(path string) string {
 }
 
 func fileHash(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	hash := sha256.Sum256(data)
+	defer file.Close()
+
+	// Hash only first 250MB to speed up large files
+	const maxBytes = 250 * 1024 * 1024
+	buffer := make([]byte, maxBytes)
+	n, err := file.Read(buffer)
+	if err != nil && err.Error() != "EOF" {
+		return "", err
+	}
+
+	hash := sha256.Sum256(buffer[:n])
 	return hex.EncodeToString(hash[:]), nil
 }
 
