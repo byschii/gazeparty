@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video</title>
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 0.5rem 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    .video-name { flex: 1; }
+    .buttons { display: flex; gap: 0.5rem; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    .btn-play { background: #007bff; color: white; }
+    .btn-play:hover { background: #0056b3; }
+    .btn-adaptive { background: #28a745; color: white; }
+    .btn-adaptive:hover { background: #1e7e34; }
+  </style>
+</head>
+<body>
+  <h1>Video</h1>
+  <ul id="list"></ul>
+  <script>
+    function play(id, mode) {
+      window.location.href = '/player?id=' + encodeURIComponent(id) + '&mode=' + mode;
+    }
+
+    fetch('/files')
+      .then(r => r.json())
+      .then(videos => {
+        const ul = document.getElementById('list');
+        videos.forEach(v => {
+          const li = document.createElement('li');
+
+          const name = document.createElement('span');
+          name.className = 'video-name';
+          name.textContent = v.name;
+
+          const buttons = document.createElement('div');
+          buttons.className = 'buttons';
+
+          const btnPlay = document.createElement('button');
+          btnPlay.className = 'btn-play';
+          btnPlay.textContent = '▶ Play';
+          btnPlay.onclick = () => play(v.id, 'single');
+
+          const btnAdaptive = document.createElement('button');
+          btnAdaptive.className = 'btn-adaptive';
+          btnAdaptive.textContent = '▶ Adaptive';
+          btnAdaptive.onclick = () => play(v.id, 'abr');
+
+          buttons.appendChild(btnPlay);
+          // buttons.appendChild(btnAdaptive);
+
+          li.appendChild(name);
+          li.appendChild(buttons);
+          ul.appendChild(li);
+        });
+      });
+  </script>
+</body>
+</html>

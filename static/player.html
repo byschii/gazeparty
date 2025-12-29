@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Player</title>
+  <style>
+    body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
+    video { max-width: 100%; max-height: 100vh; }
+    .error { color: #fff; font-family: system-ui; text-align: center; padding: 2rem; }
+    .error h1 { color: #ff6b6b; }
+    .error a { color: #4dabf7; text-decoration: none; }
+    .error a:hover { text-decoration: underline; }
+    .warning { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); background: rgba(255, 193, 7, 0.9); color: #000; padding: 0.75rem 1.5rem; border-radius: 8px; font-family: system-ui; font-size: 0.9rem; z-index: 100; opacity: 0; transition: opacity 0.3s; }
+    .warning.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <video id="video" controls autoplay style="display:none;"></video>
+  <div id="error" class="error" style="display:none;"></div>
+  <div id="warning" class="warning"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    const mode = params.get('mode') || 'single';
+
+    const video = document.getElementById('video');
+    const errorDiv = document.getElementById('error');
+    const warningDiv = document.getElementById('warning');
+
+    const targetBuffer = 60; // secondi di buffer target
+
+    function showWarning(msg) {
+      warningDiv.textContent = msg;
+      warningDiv.classList.add('show');
+      setTimeout(() => warningDiv.classList.remove('show'), 4000);
+    }
+
+    function getBufferSize() {
+      if (video.buffered.length === 0) return 0;
+      return video.buffered.end(video.buffered.length - 1) - video.currentTime;
+    }
+
+    // Check if ABR mode (not implemented yet)
+    if (mode === 'abr') {
+      errorDiv.innerHTML = `
+        <h1>Adaptive Streaming Non Implementato</h1>
+        <p>La modalita adaptive bitrate (ABR) non e ancora disponibile.</p>
+        <p><a href="/">← Torna alla lista video</a></p>
+      `;
+      errorDiv.style.display = 'block';
+    } else {
+      // Single quality mode
+      video.style.display = 'block';
+      const src = '/stream/' + id + '/playlist.m3u8';
+
+      // Warn if buffer is low when user starts playing
+      video.addEventListener('play', () => {
+        const bufferSize = getBufferSize();
+        const bufferPercent = (bufferSize / targetBuffer) * 100;
+        if (bufferPercent < 75) {
+          showWarning(`Buffer al ${bufferPercent.toFixed(0)}% - potrebbero esserci interruzioni`);
+        }
+      });
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          startPosition: 0,
+          maxBufferLength: targetBuffer,  // buffer target in secondi
+        });
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.currentTime = 0;
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = src;
+        video.currentTime = 0;
+      }
+    }
+  </script>
+</body>
+</html>
