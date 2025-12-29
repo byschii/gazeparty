@@ -53,7 +53,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 
 	// mark begin time
 	startTime := time.Now()
-
+	done := 0
 	for _, path := range paths {
 		wg.Add(1)
 		go func(p string) {
@@ -65,7 +65,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 				"[data] processing %s [speed %f v/s] [count %d/%d] \n",
 				p,
 				float64(len(p))/time.Since(startTime).Seconds(),
-				len(results)+1,
+				done+1,
 				len(paths),
 			)
 			hash, err := fileHash(p, 75)
@@ -76,6 +76,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 			duration, _ := videoDuration(p)
 			width, height, _ := videoResolution(p)
 			results <- VideoData{ID: hash, Path: p, Name: videoTitle(p), Duration: duration, Width: width, Height: height}
+			done++
 		}(path)
 	}
 
