@@ -87,12 +87,61 @@ func fileHash(path string, megaBytes int64) (string, error) {
 	}
 	defer file.Close()
 
-	// Hash only first 200MB to speed up large files
+	// Hash only first N MB to speed up large files
 	var maxBytes = megaBytes * 1024 * 1024
 
 	hash := xxhash.New()
 	_, err = io.CopyN(hash, file, maxBytes)
 	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// fileHashHeadTail hashes the first and last N megabytes of a file.
+// This is faster for large files while still detecting changes at both ends.
+func fileHashHeadTail(path string, megaBytes int64) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	fileSize := info.Size()
+	chunkSize := megaBytes * 1024 * 1024
+
+	hash := xxhash.New()
+
+	// If file is small enough, hash the whole thing
+	if fileSize <= chunkSize*2 {
+		_, err = io.Copy(hash, file)
+		if err != nil {
+			return "", err
+		}
+		return hex.EncodeToString(hash.Sum(nil)), nil
+	}
+
+	// Hash first N MB
+	_, err = io.CopyN(hash, file, chunkSize)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	// Seek to last N MB
+	_, err = file.Seek(-chunkSize, io.SeekEnd)
+	if err != nil {
+		return "", err
+	}
+
+	// Hash last N MB
+	_, err = io.Copy(hash, file)
+	if err != nil {
 		return "", err
 	}
 

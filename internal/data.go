@@ -68,7 +68,7 @@ func LoadAndSyncVideos() ([]VideoData, error) {
 				done+1,
 				len(paths),
 			)
-			hash, err := fileHash(p, 50)
+			hash, err := fileHashHeadTail(p, 7)
 			if err != nil {
 				fmt.Printf("[data] error hashing %s: %v\n", p, err)
 				return
