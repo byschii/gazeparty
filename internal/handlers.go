@@ -106,7 +106,7 @@ func HandleSegment(c *gin.Context) {
 		crf := 23
 		fmt.Printf("[segment] generating seg=%d start=%ds crf=%d\n", segNum, startTime, crf)
 
-		if err := GenerateSegmentCRF(c.Request.Context(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
+		if err := GenerateSegmentCRFOnBackground(c.Request.Context(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
 			fmt.Printf("[segment] error: %v\n", err)
 			c.String(500, "ffmpeg error")
 			return
@@ -150,7 +150,7 @@ func prefetchSegments(video *VideoData, currentSeg, count int) {
 		startTime := nextSeg * segmentDuration
 		fmt.Printf("[prefetch] generating seg=%d start=%ds\n", nextSeg, startTime)
 
-		if err := GenerateSegmentCRF(context.Background(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
+		if err := GenerateSegmentCRFOnBackground(context.Background(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
 			fmt.Printf("[prefetch] error seg=%d: %v\n", nextSeg, err)
 		}
 		lock.Unlock()
