@@ -69,6 +69,11 @@
         const hls = new Hls({
           startPosition: 0,
           maxBufferLength: targetBuffer,  // buffer target in secondi
+          fragLoadingTimeOut: 60000,      // 60s timeout for segment loading
+          fragLoadingMaxRetry: 3,         // retry up to 3 times
+          fragLoadingRetryDelay: 100,    // 100ms delay between retries
+          manifestLoadingTimeOut: 30000,  // 30s timeout for playlist
+          levelLoadingTimeOut: 30000,     // 30s timeout for level playlist
         });
         hls.loadSource(src);
         hls.attachMedia(video);

@@ -1,9 +1,23 @@
 
 services:
   gazeparty:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.rpi
+    container_name: gazeparty-rpi
     ports:
       - "8066:8066"
     volumes:
       - ./media:/video:ro
       - ./data:/data
+    environment:
+      - GIN_MODE=release
+    restart: unless-stopped
+    group_add:
+      - video
+    privileged: true
+    devices:
+      - "/dev/video10:/dev/video10"
+      - "/dev/video11:/dev/video11"
+      - "/dev/video12:/dev/video12"
+      - "/dev/dri:/dev/dri"

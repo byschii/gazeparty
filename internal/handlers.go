@@ -1,18 +1,36 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
 	videoDir        = "/video"
-	segmentDuration = 2
+	segmentDuration = 4
 )
+
+// segmentLocks prevents concurrent encoding of the same segment
+var (
+	segmentLocks   = make(map[string]*sync.Mutex)
+	segmentLocksMu sync.Mutex
+)
+
+// getSegmentLock returns a mutex for a specific segment (video_id + segment_num)
+func getSegmentLock(key string) *sync.Mutex {
+	segmentLocksMu.Lock()
+	defer segmentLocksMu.Unlock()
+	if segmentLocks[key] == nil {
+		segmentLocks[key] = &sync.Mutex{}
+	}
+	return segmentLocks[key]
+}
 
 // GET /files
 func HandleFiles(c *gin.Context) {
@@ -71,8 +89,14 @@ func HandleSegment(c *gin.Context) {
 
 	// Segment file path
 	segmentPath := fmt.Sprintf("/tmp/segments/%s/segment_%d.ts", id, segNum)
+	segmentKey := fmt.Sprintf("%s_%d", id, segNum)
 
-	// Check if already exists
+	// Lock this segment to prevent concurrent encoding
+	lock := getSegmentLock(segmentKey)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Check if already exists (after acquiring lock)
 	if _, err := os.Stat(segmentPath); err != nil {
 		// Create directory
 		os.MkdirAll(fmt.Sprintf("/tmp/segments/%s", id), 0755)
@@ -89,6 +113,46 @@ func HandleSegment(c *gin.Context) {
 		}
 	}
 
+	// Prefetch next 2 segments in background
+	go prefetchSegments(video, segNum, 2)
+
 	c.Header("Cache-Control", "public, max-age=3600")
 	c.File(segmentPath)
+}
+
+// prefetchSegments encodes the next N segments in background
+func prefetchSegments(video *VideoData, currentSeg, count int) {
+	numSegments := int(video.Duration/segmentDuration) + 1
+	crf := 23
+
+	for i := 1; i <= count; i++ {
+		nextSeg := currentSeg + i
+		if nextSeg >= numSegments {
+			break
+		}
+
+		segmentPath := fmt.Sprintf("/tmp/segments/%s/segment_%d.ts", video.ID, nextSeg)
+		segmentKey := fmt.Sprintf("%s_%d", video.ID, nextSeg)
+
+		// Try to acquire lock - if already locked, someone else is encoding it
+		lock := getSegmentLock(segmentKey)
+		if !lock.TryLock() {
+			fmt.Printf("[prefetch] seg=%d already being encoded, skipping\n", nextSeg)
+			continue
+		}
+
+		// Check if already exists (after acquiring lock)
+		if _, err := os.Stat(segmentPath); err == nil {
+			lock.Unlock()
+			continue
+		}
+
+		startTime := nextSeg * segmentDuration
+		fmt.Printf("[prefetch] generating seg=%d start=%ds\n", nextSeg, startTime)
+
+		if err := GenerateSegmentCRF(context.Background(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
+			fmt.Printf("[prefetch] error seg=%d: %v\n", nextSeg, err)
+		}
+		lock.Unlock()
+	}
 }
