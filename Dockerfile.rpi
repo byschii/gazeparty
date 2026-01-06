@@ -31,9 +31,9 @@ RUN useradd -m -u 1000 -s /bin/bash app && \
 RUN echo 'app ALL=(ALL) NOPASSWD: /bin/chmod' >> /etc/sudoers.d/app || true
 
 # App
+WORKDIR /app
 COPY --from=builder /out/gazeparty /usr/local/bin/gazeparty
 COPY static ./static
-WORKDIR /app
 EXPOSE 8066
 USER app
 
