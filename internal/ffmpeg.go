@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -157,7 +158,7 @@ func GenerateSegmentV4(ctx context.Context, videoPath, outputPath string, startS
 			"-pix_fmt", "yuv420p", // DEVE essere prima di -c:v per hw encoder
 			"-c:v", "h264_v4l2m2m",
 			"-b:v", bitrate,
-			"-profile:v", "main",
+			// "-profile:v", "main",
 		)
 		fmt.Printf("[ffmpeg] Using h264_v4l2m2m hardware encoder @ %s bitrate\n", bitrate)
 	} else {
@@ -185,6 +186,20 @@ func GenerateSegmentV4(ctx context.Context, videoPath, outputPath string, startS
 		outputPath,
 	)
 
+	// logging the final command for debugging
+	fmt.Printf("[ffmpeg] command: ffmpeg %v\n", args)
+
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	return cmd.Run()
+
+	// Capture stderr to see errors
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("[ffmpeg] Error output:\n%s\n", stderr.String())
+		return fmt.Errorf("ffmpeg failed: %w\n%s", err, stderr.String())
+	}
+
+	return nil
 }
