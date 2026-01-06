@@ -101,12 +101,13 @@ func HandleSegment(c *gin.Context) {
 		// Create directory
 		os.MkdirAll(fmt.Sprintf("/tmp/segments/%s", id), 0755)
 
-		// Generate segment with CRF
+		// Generate segment with CRF (software) or bitrate (hardware on RPI)
 		startTime := segNum * segmentDuration
 		crf := 23
-		fmt.Printf("[segment] generating seg=%d start=%ds crf=%d\n", segNum, startTime, crf)
+		bitrateMbps := 3
+		fmt.Printf("[segment] generating seg=%d start=%ds crf=%d bitrate=%dM\n", segNum, startTime, crf, bitrateMbps)
 
-		if err := GenerateSegmentCRFOnBackground(c.Request.Context(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
+		if err := GenerateSegmentV4(c.Request.Context(), video.Path, segmentPath, startTime, segmentDuration, crf, bitrateMbps); err != nil {
 			fmt.Printf("[segment] error: %v\n", err)
 			c.String(500, "ffmpeg error")
 			return
@@ -124,6 +125,7 @@ func HandleSegment(c *gin.Context) {
 func prefetchSegments(video *VideoData, currentSeg, count int) {
 	numSegments := int(video.Duration/segmentDuration) + 1
 	crf := 23
+	bitrateMbps := 3
 
 	for i := 1; i <= count; i++ {
 		nextSeg := currentSeg + i
@@ -150,7 +152,7 @@ func prefetchSegments(video *VideoData, currentSeg, count int) {
 		startTime := nextSeg * segmentDuration
 		fmt.Printf("[prefetch] generating seg=%d start=%ds\n", nextSeg, startTime)
 
-		if err := GenerateSegmentCRFOnBackground(context.Background(), video.Path, segmentPath, startTime, segmentDuration, crf); err != nil {
+		if err := GenerateSegmentV4(context.Background(), video.Path, segmentPath, startTime, segmentDuration, crf, bitrateMbps); err != nil {
 			fmt.Printf("[prefetch] error seg=%d: %v\n", nextSeg, err)
 		}
 		lock.Unlock()
